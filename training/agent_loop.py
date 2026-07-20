@@ -46,8 +46,33 @@ logger = logging.getLogger(__name__)
 logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 
 # ---------------------------------------------------------------------------
-# Local evaluation
+# GPU fleet runner
 # ---------------------------------------------------------------------------
+
+from lib.runners import GPUSlot, GPUPoolRunner
+
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _get_pool(task: TaskConfig, fleet_override: list[dict] | None = None):
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:
+                if fleet_override:
+                    slots = [GPUSlot(**s) for s in fleet_override]
+                    _pool = GPUPoolRunner(slots=slots, task=task)
+                else:
+                    _pool = GPUPoolRunner(task=task)
+                logger.info(f"SDPO: Initialized GPUPoolRunner with {_pool.total} slots")
+    return _pool
+
+
+# ---------------------------------------------------------------------------
+# Local evaluation (fallback)
+# ---------------------------------------------------------------------------
+
 
 
 def _evaluate_locally(modified_code: str, task: TaskConfig) -> subprocess.CompletedProcess:
@@ -118,9 +143,11 @@ class AutoresearchAgentLoop(ToolAgentLoop):
     """
 
     def __init__(self, *args, c_puct: float = 1.0, max_states: int = 1000,
-                 task_config: str = "tasks/autoresearch.yaml", **kwargs):
+                 task_config: str = "tasks/autoresearch.yaml",
+                 fleet_override: list[dict] | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.task = TaskConfig.from_yaml(task_config)
+        self._fleet_override = fleet_override
 
         global _buffer_kwargs
         _buffer_kwargs = {"c_puct": c_puct, "max_states": max_states}
@@ -355,9 +382,14 @@ class AutoresearchAgentLoop(ToolAgentLoop):
                     return reward, f"{feedback}\n\n{task.feedback.success}"
                 return reward, f"{feedback}\n\n{task.feedback.failure}"
 
-        # Evaluate locally (blocking I/O → run in thread)
+        # Dispatch experiment (remote fleet if configured, else local fallback)
         self._is_novel = 1.0
-        output = await asyncio.to_thread(_evaluate_locally, modified, task)
+        self._last_env_metrics = {}
+        pool = _get_pool(task, self._fleet_override)
+        if pool.total > 0:
+            output = await asyncio.to_thread(pool.run, modified)
+        else:
+            output = await asyncio.to_thread(_evaluate_locally, modified, task)
 
         # Parse metrics
         metrics = task.parse_metrics(output.stdout) if output.stdout else {}
