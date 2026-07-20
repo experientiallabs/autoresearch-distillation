@@ -15,7 +15,12 @@ each other.
 Cache files live in /data/cache/{task_name}_{method}.json or outputs/cache/ fallback.
 """
 
-import fcntl
+try:
+    import fcntl
+    _HAS_FCNTL = True
+except ImportError:
+    _HAS_FCNTL = False
+
 import hashlib
 import json
 import logging
@@ -31,7 +36,7 @@ _data_dir = Path(os.environ.get("DATA_DIR", "/data"))
 CACHE_DIR = _data_dir / "cache" if os.access(str(_data_dir), os.W_OK) else Path(__file__).resolve().parent.parent / "outputs" / "cache"
 
 # Repo-committed merged cache from all previous runs (read-only seed)
-_REPO_DIR = Path(__file__).resolve().parent
+_REPO_DIR = Path(__file__).resolve().parent.parent
 SEED_CACHE = _REPO_DIR / "cache" / "all.json"
 
 FLOCK_TIMEOUT = 60  # seconds
@@ -50,6 +55,8 @@ GRPO_CACHE = CACHE_DIR / "grpo.json"
 
 def _flock_with_timeout(f, lock_type, timeout=FLOCK_TIMEOUT):
     """Acquire flock with timeout. Returns True if acquired, False if timed out."""
+    if not _HAS_FCNTL:
+        return True
     deadline = time.monotonic() + timeout
     while True:
         try:
