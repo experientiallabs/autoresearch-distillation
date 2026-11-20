@@ -265,8 +265,10 @@ The Python requirements pin patched HTTP, certificate, image, serialization,
 DNS, configuration, telemetry and local Git utilities. The GPU frameworks and
 model-library versions stay independently pinned. The viewer uses Next.js
 16.4.6 with patched dependency resolutions and disabled npm install hooks.
-Its loading state now follows the selected run/scenario, so a late response
-cannot replace a newer selection. Existing pages and controls remain the same.
+Loading for run results, scenario details and comparison rollout details follows
+the current selection, and those requests ignore late responses after selection
+changes. The comparison page's aggregate-summary fetch is unchanged. Existing
+pages and controls remain the same.
 
 Pull-request CI runs a CPU utility compatibility suite, the six existing task
 configuration smoke cases, and viewer lint, production-mode build and browser
