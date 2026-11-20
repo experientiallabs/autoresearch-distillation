@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { fetchIndex, fetchSummary, formatDuration, formatPercent } from "@/lib/data";
+import { fetchIndex, fetchSummary, formatDuration } from "@/lib/data";
 import type { RunIndex, RunSummary, ScenarioSummary, SortConfig } from "@/lib/types";
 import { Badge, ScoreBar, Spinner, EmptyState } from "@/components/ui";
 
@@ -11,9 +11,11 @@ type PassFilter = "all" | "pass" | "fail";
 export default function ScenariosPage() {
   const router = useRouter();
   const [index, setIndex] = useState<RunIndex | null>(null);
-  const [summary, setSummary] = useState<RunSummary | null>(null);
+  const [loadedSummary, setLoadedSummary] = useState<{ runId: string; value: RunSummary | null } | null>(null);
   const [selectedRun, setSelectedRun] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [indexLoading, setIndexLoading] = useState(true);
+  const summary = loadedSummary?.runId === selectedRun ? loadedSummary.value : null;
+  const loading = indexLoading || (!!selectedRun && loadedSummary?.runId !== selectedRun);
 
   const [search, setSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
@@ -25,17 +27,17 @@ export default function ScenariosPage() {
     fetchIndex().then((idx) => {
       setIndex(idx);
       if (idx.runs.length > 0) setSelectedRun(idx.runs[0].run_id);
-      setLoading(false);
+      setIndexLoading(false);
     });
   }, []);
 
   useEffect(() => {
-    if (!selectedRun) { setSummary(null); return; }
-    setLoading(true);
-    fetchSummary(selectedRun).then((s) => {
-      setSummary(s);
-      setLoading(false);
+    if (!selectedRun) return;
+    let active = true;
+    fetchSummary(selectedRun).then((value) => {
+      if (active) setLoadedSummary({ runId: selectedRun, value });
     });
+    return () => { active = false; };
   }, [selectedRun]);
 
   const categories = useMemo(() => {

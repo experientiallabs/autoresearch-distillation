@@ -20,25 +20,34 @@ export function ScenarioDetailClient({
   scenarioId: string;
   runId: string;
 }) {
-  const [detail, setDetail] = useState<ScenarioDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [scenarioIds, setScenarioIds] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    detail: ScenarioDetail | null;
+    scenarioIds: string[];
+  } | null>(null);
+  const requestKey = JSON.stringify([runId, scenarioId]);
+  const current = loaded?.key === requestKey ? loaded : null;
+  const detail = current?.detail ?? null;
+  const scenarioIds = current?.scenarioIds ?? [];
+  const loading = !!runId && current === null;
 
   useEffect(() => {
-    if (!runId) { setLoading(false); return; }
-
-    setLoading(true);
+    if (!runId) return;
+    let active = true;
     const decoded = decodeURIComponent(scenarioId);
 
     Promise.all([
       fetchDetail(runId, decoded),
       fetchSummary(runId),
     ]).then(([d, s]) => {
-      setDetail(d);
-      if (s) setScenarioIds(s.scenarios.map((sc) => sc.scenario_id));
-      setLoading(false);
+      if (active) setLoaded({
+        key: requestKey,
+        detail: d,
+        scenarioIds: s?.scenarios.map((sc) => sc.scenario_id) ?? [],
+      });
     });
-  }, [runId, scenarioId]);
+    return () => { active = false; };
+  }, [runId, scenarioId, requestKey]);
 
   if (loading) return <Spinner />;
 

@@ -1,0 +1,55 @@
+name: Package compatibility
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  utilities:
+    runs-on: ubuntu-latest
+    env:
+      UV_KEYRING_PROVIDER: disabled
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+        with:
+          version: 0.13.4
+          checksum: 2b428396f12572d4429cf210ca234dd599a33b3af0958a4d5ed569d63e3f344f
+          python-version: '3.12'
+      - name: Install the pinned utility subset without GPU packages
+        run: |
+          uv venv
+          python - <<'PY'
+          import pathlib, subprocess
+          names = {'aiohttp', 'anyio', 'cbor2', 'certifi', 'dnspython', 'filelock',
+                   'gitpython', 'hydra-core', 'msgpack', 'multidict', 'orjson',
+                   'packaging', 'pillow', 'protobuf', 'pyarrow', 'pyasn1',
+                   'pydantic-settings', 'python-dotenv', 'python-multipart', 'pyyaml',
+                   'requests', 'urllib3', 'virtualenv', 'yarl', 'opentelemetry-api',
+                   'opentelemetry-sdk', 'opentelemetry-exporter-prometheus',
+                   'opentelemetry-semantic-conventions', 'opentelemetry-proto'}
+          pins = [line for line in pathlib.Path('SDPO/requirements-full.txt').read_text().splitlines()
+                  if line.split('==')[0].lower() in names and '==' in line]
+          assert {line.split('==')[0].lower() for line in pins} == names
+          subprocess.run(['uv', 'pip', 'install', '--exclude-newer', '2026-11-13', *pins], check=True)
+          PY
+      - run: .venv/bin/python tests/test_package_compatibility.py
+      - run: .venv/bin/python test_task_config.py --all
+  viewer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: viewer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.1'
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run build
+      - run: npx --no-install playwright install --with-deps chromium
+      - run: npm run test:e2e

@@ -258,3 +258,25 @@ python loop_baseline.py --max-turns 50 --mode agent --single-turn --run-name qwe
 ## License
 
 MIT
+
+## Utility security updates and validation
+
+The Python requirements pin patched HTTP, certificate, image, serialization,
+DNS, configuration, telemetry and local Git utilities. The GPU frameworks and
+model-library versions stay independently pinned. The viewer uses Next.js
+16.4.6 with patched dependency resolutions and disabled npm install hooks.
+Its loading state now follows the selected run/scenario, so a late response
+cannot replace a newer selection. Existing pages and controls remain the same.
+
+Pull-request CI runs a CPU utility compatibility suite, the six existing task
+configuration smoke cases, and viewer lint, production-mode build and browser
+tests with synthetic responses. It does not launch training, contact a fleet,
+download model weights, publish artifacts or deploy. This is not GPU
+qualification of the complete training requirements.
+
+Some upgrades remain coupled to the training stack: TensorDict's Pyvers pin
+requires Packaging below 26, which prevents Virtualenv 21's dependency floor;
+Virtualenv 20.36.1 retains later advisories. Filelock 4.1+ can hang the retained
+Hugging Face Hub fallback on filesystems without flock, so this change stays on
+compatible 3.x versions. Remaining Torch, vLLM, Transformers, Ray, SGLang and
+other model-stack advisories require separate compatibility work.

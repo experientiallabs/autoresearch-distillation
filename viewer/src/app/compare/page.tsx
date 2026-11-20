@@ -4,7 +4,6 @@ import { useEffect, useState, useMemo } from "react";
 import { fetchIndex, fetchSummary, fetchDetail, formatPercent } from "@/lib/data";
 import type { RunIndex, RunSummary, ScenarioDetail } from "@/lib/types";
 import { Card, Badge, Spinner, EmptyState } from "@/components/ui";
-import { ConversationTimeline } from "@/components/conversation";
 
 export default function ComparePage() {
   const [index, setIndex] = useState<RunIndex | null>(null);
@@ -13,8 +12,10 @@ export default function ComparePage() {
   const [runIds, setRunIds] = useState<string[]>(["", ""]);
   const [summaries, setSummaries] = useState<(RunSummary | null)[]>([null, null]);
   const [selectedScenario, setSelectedScenario] = useState("");
-  const [details, setDetails] = useState<(ScenarioDetail | null)[]>([null, null]);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [loadedDetails, setLoadedDetails] = useState<{ key: string; value: (ScenarioDetail | null)[] } | null>(null);
+  const detailKey = JSON.stringify([selectedScenario, ...runIds]);
+  const details = selectedScenario && loadedDetails?.key === detailKey ? loadedDetails.value : runIds.map(() => null);
+  const loadingDetails = !!selectedScenario && loadedDetails?.key !== detailKey;
 
   useEffect(() => {
     fetchIndex().then((idx) => {
@@ -33,17 +34,17 @@ export default function ComparePage() {
   }, [runIds]);
 
   useEffect(() => {
-    if (!selectedScenario) { setDetails([null, null]); return; }
-    setLoadingDetails(true);
+    if (!selectedScenario) return;
+    let active = true;
     Promise.all(
       runIds.map((id) =>
         id ? fetchDetail(id, selectedScenario) : Promise.resolve(null)
       )
-    ).then((d) => {
-      setDetails(d);
-      setLoadingDetails(false);
+    ).then((value) => {
+      if (active) setLoadedDetails({ key: detailKey, value });
     });
-  }, [selectedScenario, runIds]);
+    return () => { active = false; };
+  }, [selectedScenario, runIds, detailKey]);
 
   const commonScenarios = useMemo(() => {
     const sets = summaries

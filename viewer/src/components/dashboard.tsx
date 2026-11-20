@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { fetchIndex, fetchSummary, formatPercent } from "@/lib/data";
 import type { RunIndex, RunSummary } from "@/lib/types";
-import { StatCard, EmptyState, Spinner, Badge } from "./ui";
+import { StatCard, EmptyState, Spinner } from "./ui";
 
 export function DashboardClient() {
   const [index, setIndex] = useState<RunIndex | null>(null);
-  const [summary, setSummary] = useState<RunSummary | null>(null);
+  const [loadedSummary, setLoadedSummary] = useState<{ runId: string; value: RunSummary | null } | null>(null);
   const [selectedRun, setSelectedRun] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [indexLoading, setIndexLoading] = useState(true);
+  const summary = loadedSummary?.runId === selectedRun ? loadedSummary.value : null;
+  const loading = indexLoading || (!!selectedRun && loadedSummary?.runId !== selectedRun);
 
   useEffect(() => {
     fetchIndex().then((idx) => {
@@ -17,20 +19,17 @@ export function DashboardClient() {
       if (idx.runs.length > 0) {
         setSelectedRun(idx.runs[0].run_id);
       }
-      setLoading(false);
+      setIndexLoading(false);
     });
   }, []);
 
   useEffect(() => {
-    if (!selectedRun) {
-      setSummary(null);
-      return;
-    }
-    setLoading(true);
-    fetchSummary(selectedRun).then((s) => {
-      setSummary(s);
-      setLoading(false);
+    if (!selectedRun) return;
+    let active = true;
+    fetchSummary(selectedRun).then((value) => {
+      if (active) setLoadedSummary({ runId: selectedRun, value });
     });
+    return () => { active = false; };
   }, [selectedRun]);
 
   if (loading && !index) return <Spinner />;
