@@ -10,7 +10,9 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true);
 
   const [runIds, setRunIds] = useState<string[]>(["", ""]);
-  const [summaries, setSummaries] = useState<(RunSummary | null)[]>([null, null]);
+  const [loadedSummaries, setLoadedSummaries] = useState<{ key: string; value: (RunSummary | null)[] } | null>(null);
+  const summaryKey = JSON.stringify(runIds);
+  const summaries = useMemo(() => loadedSummaries?.key === summaryKey ? loadedSummaries.value : runIds.map(() => null), [loadedSummaries, summaryKey, runIds]);
   const [selectedScenario, setSelectedScenario] = useState("");
   const [loadedDetails, setLoadedDetails] = useState<{ key: string; value: (ScenarioDetail | null)[] } | null>(null);
   const detailKey = JSON.stringify([selectedScenario, ...runIds]);
@@ -28,10 +30,14 @@ export default function ComparePage() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     Promise.all(
       runIds.map((id) => (id ? fetchSummary(id) : Promise.resolve(null)))
-    ).then(setSummaries);
-  }, [runIds]);
+    ).then((value) => {
+      if (active) setLoadedSummaries({ key: summaryKey, value });
+    });
+    return () => { active = false; };
+  }, [runIds, summaryKey]);
 
   useEffect(() => {
     if (!selectedScenario) return;

@@ -95,3 +95,31 @@ test("a late summary cannot replace the newly selected run", async ({ page }) =>
     release();
   }
 });
+
+test("a late comparison summary cannot replace the newly selected runs", async ({ page }) => {
+  let release = () => {};
+  const delayed = new Promise<void>((resolve) => { release = resolve; });
+  let markRequested = () => {};
+  const requested = new Promise<void>((resolve) => { markRequested = resolve; });
+  await page.route("**/data/runs/one/summary.json", async (route) => {
+    markRequested();
+    await delayed;
+    await route.fulfill({ json: summary("one") });
+  });
+  try {
+    await page.goto("/compare");
+    await requested;
+    const selector = page.getByRole("combobox").first();
+    await selector.selectOption("two");
+    const newCells = page.getByRole("cell", { name: "Model two", exact: true });
+    await expect(newCells).toHaveCount(2);
+    const oldResponse = page.waitForResponse("**/data/runs/one/summary.json");
+    release();
+    await oldResponse;
+    await page.evaluate(() => new Promise(requestAnimationFrame));
+    await expect(newCells).toHaveCount(2);
+    await expect(page.getByRole("cell", { name: "Model one", exact: true })).toHaveCount(0);
+  } finally {
+    release();
+  }
+});
